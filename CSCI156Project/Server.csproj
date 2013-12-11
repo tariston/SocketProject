@@ -7,7 +7,7 @@
     <ProjectGuid>{1BDD3B04-CEEA-4DB9-AB42-A54A4A99E94D}</ProjectGuid>
     <OutputType>Exe</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>CSCI156Project</RootNamespace>
+    <RootNamespace>Server</RootNamespace>
     <AssemblyName>CSCI156Project</AssemblyName>
     <TargetFrameworkVersion>v4.5</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
