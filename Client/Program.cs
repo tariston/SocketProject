@@ -36,8 +36,14 @@ namespace Client
         {
             while(true)
             {
-                sendData();
+                string command = "get auctions";
+                var notWinning = false;
+                sendData(command);
                 recieveData();
+                while (notWinning)
+                {
+
+                }
             }
         }
 
@@ -50,9 +56,9 @@ namespace Client
             Console.WriteLine(Encoding.ASCII.GetString(trimmed));
         }
 
-        private static void sendData()
+        private static void sendData(string message)
         {
-            byte[] data = Encoding.ASCII.GetBytes("print time");
+            byte[] data = Encoding.ASCII.GetBytes(message);
             _socket.Send(data, 0, data.Length, SocketFlags.None);
         }
 
