@@ -1,0 +1,11 @@
+hostname GUID
+	sets client hostname on server
+
+list
+	sends a list of all currently active auctions
+
+price GUID
+	sends the current bid for the auction of GUID OR expired if the auction is not active
+
+bid GUID int
+	sets the current bid for auction matching GUID if int is larger than current bid. Sends accepted if success. Sends rejected if fail. Sends expired if auction is not active.

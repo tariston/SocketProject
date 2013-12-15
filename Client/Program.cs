@@ -34,15 +34,18 @@ namespace Client
 
         private static void runLoop()
         {
+            //set hostname
             while(true)
             {
+                //get auctions
                 string command = "get auctions";
                 var notWinning = false;
                 sendData(command);
                 recieveData();
+                //select auction
                 while (notWinning)
                 {
-
+                    //bid on auction
                 }
             }
         }

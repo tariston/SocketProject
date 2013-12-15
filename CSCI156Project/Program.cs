@@ -11,11 +11,11 @@ namespace CSCI156Project
 {
     class Program
     {
-        private static Socket _serverSocket = new Socket(AddressFamily.InterNetwork,SocketType.Stream, ProtocolType.Tcp);
+        private static Socket _serverSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
         private const int _bufferSize = 1024;
         private static readonly byte[] _buffer = new byte[_bufferSize];
         private const int _port = 65001;
-        private static List<Socket> _sockets = new List<Socket>();
+        //private static List<Socket> _sockets = new List<Socket>();
         private static List<SocketHost> _clients = new List<SocketHost>();
         public static List<AuctionItems> auctions = new List<AuctionItems>();
 
@@ -45,7 +45,6 @@ namespace CSCI156Project
             {
                 return;
             }
-
             Console.WriteLine("Client connected");
             _clients.Add(new SocketHost(remoteSocket));
             remoteSocket.BeginReceive(_buffer, 0, _bufferSize, SocketFlags.None, AsyncRecieveCallback, remoteSocket);
@@ -68,22 +67,73 @@ namespace CSCI156Project
             }
             byte[] temp = new byte[dataSize];
             Array.Copy(_buffer, temp, dataSize);
-            string data = Encoding.ASCII.GetString(temp);
+            string dataFromClient = Encoding.ASCII.GetString(temp);
             //Logic for bidding
-            if (data.ToLower().StartsWith("hostname"))
+            if (dataFromClient.ToLower().StartsWith("hostname"))
             {
-                string pattern = @"[0-9a-fA-F]{8}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{12}";
-                Regex rgx = new Regex(pattern);
-                string trimmed = rgx.Replace(data, pattern);
+                string UID_pattern = @"[0-9a-fA-F]{8}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{12}";
+                Regex rgx = new Regex(UID_pattern);
+                string trimmed = rgx.Replace(dataFromClient, UID_pattern);
                 //set the hostname for these sockets
-                (from x in _clients where x.sock.Equals(clientSocket) select x).ToList().ForEach(y=>y.hostname = trimmed);
-
+                (from x in _clients where x.sock.Equals(clientSocket) select x).ToList().ForEach(y => y.hostname = trimmed);
             }
-            if (data.ToLower().StartsWith(""))
+            if (dataFromClient.ToLower().StartsWith("list"))
             {
-
+                var activeAuctions = auctions.Where(x => x.active);
+                string raw = String.Join(",", auctions);
+                byte[] dataToClient = Encoding.ASCII.GetBytes(raw);
+                clientSocket.Send(dataToClient);
             }
-
+            if (dataFromClient.ToLower().StartsWith("price"))
+            {
+                string UID_pattern = @"[0-9a-fA-F]{8}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{12}";
+                Regex rgx = new Regex(UID_pattern);
+                string trimmed = rgx.Replace(dataFromClient, UID_pattern);
+                var auctionItem = auctions.Find(x => x.pid == new Guid(trimmed));
+                byte[] dataToClient;
+                if(auctionItem.active)
+                { 
+                    var dataToClient_s = auctionItem.currentBid.ToString();
+                    dataToClient = Encoding.ASCII.GetBytes(dataToClient_s);
+                }
+                else
+                {
+                    dataToClient = Encoding.ASCII.GetBytes("expired");
+                }
+                clientSocket.Send(dataToClient);
+            }
+            if (dataFromClient.ToLower().StartsWith("bid"))
+            {
+                Console.WriteLine("incoming:" + dataFromClient);
+                string Auction_pattern = @"[0-9a-fA-F]{8}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{12}\s[0-9]+";
+                Regex rgx = new Regex(Auction_pattern);
+                string trimmed = rgx.Replace(dataFromClient, Auction_pattern);
+                Console.WriteLine("parsed: " + trimmed);
+                var split = trimmed.Split(' ');
+                var item = split[0];
+                var bid_s = split[1];
+                var auctionItem = auctions.Find(x => x.pid == new Guid(item));
+                if (auctionItem.active)
+                {
+                    byte[] dataToClient;
+                    var bid = Convert.ToInt32(bid_s);
+                    if (bid > auctionItem.currentBid)
+                    {
+                        auctionItem.currentBid = bid;
+                        dataToClient = Encoding.ASCII.GetBytes("accepted");
+                    }
+                    else
+                    {
+                        dataToClient = Encoding.ASCII.GetBytes("rejected");
+                    }
+                    clientSocket.Send(dataToClient);
+                }
+                else
+                {
+                    var dataToClient = Encoding.ASCII.GetBytes("expired");
+                    clientSocket.Send(dataToClient);
+                }
+            }
             //End Logic
             clientSocket.BeginReceive(_buffer, 0, _bufferSize, SocketFlags.None, AsyncRecieveCallback, clientSocket);
         }
@@ -97,10 +147,13 @@ namespace CSCI156Project
 
     public class AuctionItems
     {
-        public int currentBid 
-        { 
-            get; 
-            set 
+        public int currentBid
+        {
+            get
+            {
+                return currentBid;
+            }
+            set
             {
                 if (value <= 0)
                     return;
@@ -110,11 +163,11 @@ namespace CSCI156Project
                 {
                     _active = false;
                 }
-            } 
+            }
         }
-        public readonly int maxValue { get { return _maxValue; } }
-        public readonly Guid pid { get { return _pid; } }
-        public readonly bool active { get { return _active; } }
+        public int maxValue { get { return _maxValue; } }
+        public Guid pid { get { return _pid; } }
+        public bool active { get { return _active; } }
 
         private Guid _pid { get; set; }
         private int _maxValue;
