@@ -5,6 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Net;
 using System.Net.Sockets;
+using System.Threading;
 
 namespace Client
 {
@@ -35,28 +36,78 @@ namespace Client
         private static void runLoop()
         {
             //set hostname
+            Guid g = Guid.NewGuid();
+            Console.WriteLine(g);
+            var hostname = g.ToString();
+            hostname = "hostname " + hostname;
+            Console.WriteLine("Sending " + hostname);
+            sendData(hostname);
+            recieveData();
             while(true)
             {
                 //get auctions
-                string command = "get auctions";
-                var notWinning = false;
+                var rnd = new Random();
+                string command = "list";
+                Console.WriteLine("Sending Command: " + command);
                 sendData(command);
-                recieveData();
-                //select auction
-                while (notWinning)
+                var receivedData = recieveData();
+                var auctions = receivedData.Split(',');
+                var pick = rnd.Next(auctions.Count());
+                //            return _pid + ";" + maxValue + ";" + currentBid + ";" + active;
+                var raw = auctions[pick].Split(';');
+                var bidding = Convert.ToBoolean(raw[3]);
+                var auctionId = raw[0];
+                int mybid = Convert.ToInt32(raw[2]) + 1;
+                int maxBid = Convert.ToInt32(raw[1]);
+
+                while(bidding)
                 {
-                    //bid on auction
+                    //bid
+                    command = "bid " + auctionId + " " + mybid;
+                    Console.WriteLine(command);
+                    sendData(command);
+                    receivedData = recieveData();
+                    if (receivedData.ToLower().StartsWith("expired"))
+                    {
+                        Console.WriteLine("Expired");
+                        bidding = false; 
+                    }
+                        
+                    else if (receivedData.ToLower().StartsWith("accepted"))
+                    {
+                        Console.WriteLine("Bid Accepted");
+                        mybid = mybid+1;
+                    }
+                    else if (receivedData.ToLower().StartsWith("rejected"))
+                    {
+                        command = "price " + auctionId;
+                        Console.WriteLine(command); 
+                        sendData(command);
+                        if (receivedData.StartsWith("expired"))
+                            bidding = false;
+                        receivedData = recieveData();
+                        mybid = Convert.ToInt32(receivedData) + 1;
+                    }
+
+                    Thread.Sleep(rnd.Next(1000));
+                    //get currentBid
                 }
+                Thread.Sleep(rnd.Next(1000));
+                
+                //Thread.Sleep(5000);
+                //select auction
             }
         }
 
-        private static void recieveData()
+        private static string recieveData()
         {
             byte[] data = new byte[1024];
             int length = _socket.Receive(data, SocketFlags.None);
             byte[] trimmed = new byte[length];
             Array.Copy(data, trimmed, length);
-            Console.WriteLine(Encoding.ASCII.GetString(trimmed));
+            var incomingData =Encoding.ASCII.GetString(trimmed); 
+            Console.WriteLine(incomingData);
+            return incomingData;
         }
 
         private static void sendData(string message)
@@ -67,6 +118,7 @@ namespace Client
 
         static void Main(string[] args)
         {
+            Console.Title = "Client";
             connect();
             Console.ReadLine();
         }

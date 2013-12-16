@@ -26,6 +26,11 @@ namespace Server
             {
                 var rnd = new Random();
                 var auction = new AuctionItems(rnd.Next(100));
+                Console.WriteLine("Auction Item" + i);
+                Console.WriteLine(auction.active);
+                Console.WriteLine(auction.currentBid);
+                Console.WriteLine(auction.maxValue);
+                Console.WriteLine(auction.pid);
                 auctions.Add(auction);
             }
             _serverSocket.Bind(new IPEndPoint(IPAddress.Any, _port));
@@ -47,6 +52,7 @@ namespace Server
             }
             Console.WriteLine("Client connected");
             _clients.Add(new SocketHost(remoteSocket));
+            Console.WriteLine("Number of clients connected: " + _clients.Count());
             remoteSocket.BeginReceive(_buffer, 0, _bufferSize, SocketFlags.None, AsyncRecieveCallback, remoteSocket);
             _serverSocket.BeginAccept(AsyncAcceptCallback, null);
         }
@@ -73,26 +79,34 @@ namespace Server
             {
                 string UID_pattern = @"[0-9a-fA-F]{8}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{12}";
                 Regex rgx = new Regex(UID_pattern);
-                string trimmed = rgx.Replace(dataFromClient, UID_pattern);
+                var match = rgx.Match(dataFromClient);
+                var trimmed = match.Value;
                 //set the hostname for these sockets
+                Console.WriteLine("Setting Client Hostname");
                 (from x in _clients where x.sock.Equals(clientSocket) select x).ToList().ForEach(y => y.hostname = trimmed);
+                var dataToClient_s = "set";
+                var dataToClient = Encoding.ASCII.GetBytes(dataToClient_s);
+                clientSocket.Send(dataToClient);
             }
             if (dataFromClient.ToLower().StartsWith("list"))
             {
+                Console.WriteLine("Command Received: list");
                 var activeAuctions = auctions.Where(x => x.active);
-                string raw = String.Join(",", auctions);
+                string raw = String.Join(",", auctions.Select(x => x.ToString()).ToArray());
                 byte[] dataToClient = Encoding.ASCII.GetBytes(raw);
                 clientSocket.Send(dataToClient);
             }
             if (dataFromClient.ToLower().StartsWith("price"))
             {
+                Console.WriteLine("Command Received: price");
                 string UID_pattern = @"[0-9a-fA-F]{8}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{12}";
                 Regex rgx = new Regex(UID_pattern);
-                string trimmed = rgx.Replace(dataFromClient, UID_pattern);
+                var match = rgx.Match(dataFromClient);
+                var trimmed = match.Value;
                 var auctionItem = auctions.Find(x => x.pid == new Guid(trimmed));
                 byte[] dataToClient;
-                if(auctionItem.active)
-                { 
+                if (auctionItem.active)
+                {
                     var dataToClient_s = auctionItem.currentBid.ToString();
                     dataToClient = Encoding.ASCII.GetBytes(dataToClient_s);
                 }
@@ -107,7 +121,8 @@ namespace Server
                 Console.WriteLine("incoming:" + dataFromClient);
                 string Auction_pattern = @"[0-9a-fA-F]{8}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{12}\s[0-9]+";
                 Regex rgx = new Regex(Auction_pattern);
-                string trimmed = rgx.Replace(dataFromClient, Auction_pattern);
+                var match = rgx.Match(dataFromClient);
+                var trimmed = match.Value;
                 Console.WriteLine("parsed: " + trimmed);
                 var split = trimmed.Split(' ');
                 var item = split[0];
@@ -136,10 +151,36 @@ namespace Server
             }
             //End Logic
             clientSocket.BeginReceive(_buffer, 0, _bufferSize, SocketFlags.None, AsyncRecieveCallback, clientSocket);
+            try
+            {
+                var expiredAuctions = auctions.Count(x => !x.active);
+                if (expiredAuctions > 0)
+                {
+                    //foreach(var _item in expiredAuctions)
+                    //{
+                    //    auctions.Remove(_item);
+                    //}
+                    for (int i = expiredAuctions; i > 0; i--)
+                    {
+                        var rnd = new Random();
+                        var auction = new AuctionItems(rnd.Next(100));
+                        auctions.Add(auction);
+                    }
+                }
+            }
+            catch (NullReferenceException)
+            {
+                Console.WriteLine("No expired Auctions");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.InnerException.Message);
+            }
         }
 
         static void Main(string[] args)
         {
+            Console.Title = "Server";
             ServerInit();
             Console.ReadLine();
         }
@@ -147,21 +188,24 @@ namespace Server
 
     public class AuctionItems
     {
+        public int _currentBid;
         public int currentBid
         {
             get
             {
-                return currentBid;
+                return _currentBid;
             }
             set
             {
-                if (value <= 0)
-                    return;
-                else if (value < _maxValue && _active)
-                    currentBid = value;
+                if (value < 0)
+                    _currentBid = -1;
                 else
                 {
-                    _active = false;
+                    if (value < _maxValue && _active)
+                        _currentBid = value;
+                    else
+                        _active = false;
+
                 }
             }
         }
@@ -177,9 +221,21 @@ namespace Server
         public AuctionItems(int maxValue)
         {
             this._maxValue = maxValue;
-            this._pid = new Guid();
-            this.currentBid = 0;
+            this._pid = Guid.NewGuid();
+            this._currentBid = 0;
             this._active = true;
+        }
+
+        public AuctionItems(string pid, int maxValue, int currentBid, bool active)
+        {
+            this._maxValue = maxValue;
+            this._pid = new Guid(pid);
+            this._currentBid = currentBid;
+            this._active = active;
+        }
+        public override string ToString()
+        {
+            return _pid + ";" + maxValue + ";" + currentBid + ";" + active;
         }
     }
     public class SocketHost
